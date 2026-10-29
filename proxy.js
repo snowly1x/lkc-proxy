@@ -22,6 +22,9 @@ if (!XAI_API_KEY) {
 }
 
 const server = http.createServer(async (req, res) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.url}`);
+
   // CORS headers so the iPhone / browser can talk to us
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -42,9 +45,11 @@ const server = http.createServer(async (req, res) => {
 
   // Only proxy the chat completions endpoint
   if (req.method === "POST" && req.url === "/v1/chat/completions") {
+    console.log(`[${timestamp}] Chat request received, forwarding to xAI...`);
     let body = "";
     req.on("data", chunk => body += chunk);
     req.on("end", () => {
+      console.log(`[${timestamp}] Body length: ${body.length} bytes`);
       const options = {
         hostname: "api.x.ai",
         path: "/v1/chat/completions",
@@ -57,6 +62,7 @@ const server = http.createServer(async (req, res) => {
       };
 
       const proxyReq = https.request(options, (proxyRes) => {
+        console.log(`[${timestamp}] xAI responded with status ${proxyRes.statusCode}`);
         res.writeHead(proxyRes.statusCode, {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*"
@@ -65,9 +71,9 @@ const server = http.createServer(async (req, res) => {
       });
 
       proxyReq.on("error", (err) => {
-        console.error("Proxy error:", err.message);
+        console.error(`[${timestamp}] Proxy error:`, err.message);
         res.writeHead(502, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Proxy failed to reach xAI" }));
+        res.end(JSON.stringify({ error: "Proxy failed to reach xAI", details: err.message }));
       });
 
       proxyReq.write(body);
@@ -76,6 +82,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  console.log(`[${timestamp}] 404 for ${req.url}`);
   res.writeHead(404);
   res.end("Not found");
 });
